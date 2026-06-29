@@ -1,0 +1,101 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Global State
+local active = false
+local autoPlace = false
+local grabLimit = 1 -- Default grab limit
+
+-- 1. BUILD GUI (Strictly separated)
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 340, 0, 240); mainFrame.Position = UDim2.new(0.5, -170, 0.5, -120)
+mainFrame.BackgroundColor3 = Color3.fromRGB(58, 39, 98); mainFrame.Active = true; mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+local farmToggle = Instance.new("TextButton", mainFrame)
+farmToggle.Size = UDim2.new(0.9, 0, 0, 50); farmToggle.Position = UDim2.new(0.05, 0, 0.28, 0)
+farmToggle.BackgroundColor3 = Color3.fromRGB(75, 55, 120); farmToggle.Text = "Farm: OFF"; farmToggle.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", farmToggle).CornerRadius = UDim.new(0, 10)
+
+local placeToggle = Instance.new("TextButton", mainFrame)
+placeToggle.Size = UDim2.new(0.9, 0, 0, 50); placeToggle.Position = UDim2.new(0.05, 0, 0.55, 0)
+placeToggle.BackgroundColor3 = Color3.fromRGB(75, 55, 120); placeToggle.Text = "Auto Equip: OFF"; placeToggle.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", placeToggle).CornerRadius = UDim.new(0, 10)
+
+local statusLabel = Instance.new("TextLabel", mainFrame)
+statusLabel.Size = UDim2.new(0.9, 0, 0, 35); statusLabel.Position = UDim2.new(0.05, 0, 0.82, 0)
+statusLabel.BackgroundTransparency = 1; statusLabel.Text = "Idle"; statusLabel.TextColor3 = Color3.new(1,1,1)
+
+-- 2. ATTACH LOGIC
+farmToggle.MouseButton1Click:Connect(function()
+    active = not active
+    farmToggle.Text = "Farm: " .. (active and "ON" or "OFF")
+    farmToggle.BackgroundColor3 = active and Color3.fromRGB(40, 130, 70) or Color3.fromRGB(75, 55, 120)
+end)
+
+placeToggle.MouseButton1Click:Connect(function()
+    autoPlace = not autoPlace
+    placeToggle.Text = "Auto Equip: " .. (autoPlace and "ON" or "OFF")
+    placeToggle.BackgroundColor3 = autoPlace and Color3.fromRGB(40, 130, 70) or Color3.fromRGB(75, 55, 120)
+end)
+
+-- 3. FARMING LOOP WITH DYNAMIC GRAB LIMIT
+task.spawn(function()
+    local PurchaseEvent = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("PurchaseUpgrade")
+    
+    while task.wait(0.5) do
+        if active then
+            -- Auto-upgrade and increment limit
+            if PurchaseEvent and grabLimit < 6 then 
+                PurchaseEvent:FireServer("CarryCapacity", 1) 
+                grabLimit = math.min(grabLimit + 1, 6) -- Increment limit, cap at 6
+            end
+
+            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then continue end
+
+            -- Priority Search (9 -> 8)
+            local itemSpawns = workspace:FindFirstChild("ItemSpawns")
+            local spawn9 = itemSpawns and itemSpawns:FindFirstChild("9")
+            local spawn8 = itemSpawns and itemSpawns:FindFirstChild("8")
+            local target = (spawn9 and spawn9:FindFirstChild("SpawnedItem")) and spawn9 
+                         or ((spawn8 and spawn8:FindFirstChild("SpawnedItem")) and spawn8)
+            
+            local spawnedItem = target and target:FindFirstChild("SpawnedItem")
+            local prompt = spawnedItem and spawnedItem:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local bikeSpawn = workspace:FindFirstChild("Zones") and workspace.Zones:FindFirstChild("BikeSpawn")
+
+            if spawnedItem and prompt then
+                statusLabel.Text = "Grabbing " .. grabLimit .. "x..."
+                hrp.CFrame = spawnedItem:GetPivot()
+                task.wait(0.2)
+                
+                -- GRAB DYNAMICALLY BASED ON LIMIT
+                for i = 1, grabLimit do
+                    if prompt and prompt.Parent then fireproximityprompt(prompt) end
+                    task.wait(0.05)
+                end
+                
+                -- Instant TP
+                if bikeSpawn then 
+                    statusLabel.Text = "Teleporting..."
+                    hrp.CFrame = bikeSpawn:GetPivot() 
+                end
+            else
+                statusLabel.Text = "Waiting for Item..."
+            end
+        else
+            statusLabel.Text = "Idle"
+        end
+    end
+end)
+
+-- 4. AUTO EQUIP
+task.spawn(function()
+    local PlaceEvent = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("PlaceBestBrainrots")
+    while task.wait(1.2) do
+        if autoPlace and PlaceEvent then PlaceEvent:FireServer() end
+    end
+end)
