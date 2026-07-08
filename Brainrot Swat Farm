@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
 
@@ -9,17 +10,12 @@ local SCRIPT_VERSION = "0.12 BETA"
 
 -- =============================================
 -- EXECUTOR DETECTION (covers all WEAO executors)
--- Uses UNC identifyexecutor() first (supported by all modern executors),
--- then falls back to unique globals per executor.
 -- =============================================
 local function getExecutor()
-    -- UNC standard — supported by: Synapse Z, AWP, Seliware, Potassium,
-    -- Matcha, Cryptic, Electron/Volcano, Celery, Zorara, Nihon, and more
     if identifyexecutor then
         local ok, name = pcall(identifyexecutor)
         if ok and name and name ~= "" then return name end
     end
-    -- Legacy / non-UNC fallbacks
     if syn and syn.request then return "Synapse X" end
     if KRNL_LOADED then return "KRNL" end
     if fluxus then return "Fluxus" end
@@ -149,16 +145,32 @@ logoLabel.TextColor3 = COLOR_WHITE
 logoLabel.Font = Enum.Font.GothamBold
 logoLabel.ZIndex = 4
 
+-- GAME LIST + DETECTION
+local gamesList = {
+    { name = "Bike Obby For Brainrots", supported = true, placeId = 136919941417380 },
+    { name = "+1 Backflip Obby Escape", supported = true, placeId = 86378115369061 },
+}
+
+local currentPlaceId = game.PlaceId
+local currentGameData = nil
+for _, g in ipairs(gamesList) do
+    if g.placeId == currentPlaceId then
+        currentGameData = g
+        break
+    end
+end
+local isGameSupported = currentGameData ~= nil
+
 -- NAV ITEMS
 local navItems = {
     { icon = "🏠", label = "Home",       page = "home"      },
     { icon = "🎮", label = "Game",       page = "game"      },
     { icon = "📋", label = "Games List", page = "gameslist" },
-    { icon = "⚙",  label = "Settings",  page = "settings"  },
+    { icon = "⚙",  label = "Settings",   page = "settings"  },
     { icon = "🏅", label = "Credits",    page = "credits"   },
 }
 
-local currentPage = "home"
+local currentPage = isGameSupported and "game" or "home"
 local navButtons = {}
 
 local function refreshNav()
@@ -243,10 +255,6 @@ homePage.BackgroundTransparency = 1
 homePage.ZIndex = 3
 homePage.Visible = true
 
-local gamesList = {
-    { name = "Bike Obby For Brainrots", supported = true },
-}
-
 local function makeLabel(parent, text, yPos, textSize, color, bold, wrap)
     local lbl = Instance.new("TextLabel", parent)
     lbl.Size = UDim2.new(0.92, 0, 0, textSize + 8)
@@ -265,7 +273,6 @@ end
 makeLabel(homePage, "Thanks for using Brainrot Swat!", 12, 15, COLOR_WHITE, true)
 makeLabel(homePage, "We currently support " .. #gamesList .. " game(s)!", 34, 12, COLOR_DIM, false)
 
--- Divider
 local divider = Instance.new("Frame", homePage)
 divider.Size = UDim2.new(0.88, 0, 0, 1)
 divider.Position = UDim2.new(0.06, 0, 0, 60)
@@ -332,17 +339,64 @@ gamePage.BackgroundTransparency = 1
 gamePage.ZIndex = 3
 gamePage.Visible = false
 
-createToggle(gamePage, 10,  "Farm Brainrots",     "farm")
-createToggle(gamePage, 62,  "Auto Equip Best",    "equip")
-createToggle(gamePage, 114, "Auto Rebirth",       "rebirth")
-createToggle(gamePage, 166, "Auto Upgrade Speed", "upgrade")
+if isGameSupported then
+    makeLabel(gamePage, "Loaded: " .. currentGameData.name, -18, 13, Color3.fromRGB(120, 230, 120), true)
+
+    if currentGameData.name == "Bike Obby For Brainrots" then
+        createToggle(gamePage, 10,  "Farm Brainrots",   "farm")
+        createToggle(gamePage, 62,  "Auto Equip Best",  "equip")
+        createToggle(gamePage, 114, "Auto Rebirth",       "rebirth")
+        createToggle(gamePage, 166, "Auto Upgrade Speed", "upgrade")
+    elseif currentGameData.name == "+1 Backflip Obby Escape" then
+        local winsLbl   = makeLabel(gamePage, "Wins: --",     20, 13, COLOR_WHITE, false)
+        local rebirthLbl = makeLabel(gamePage, "Rebirths: --", 44, 13, COLOR_WHITE, false)
+        local zoneLbl   = makeLabel(gamePage, "Zone: --",      68, 13, COLOR_WHITE, false)
+        
+        createToggle(gamePage, 114, "Auto Farm Wins", "autoWin")
+
+        task.spawn(function()
+            while task.wait(1) do
+                local leaderstats = player:FindFirstChild("leaderstats")
+                if leaderstats then
+                    local winsStat = leaderstats:FindFirstChild("Wins")
+                    local rebirthStat = leaderstats:FindFirstChild("Rebirths")
+                    if winsStat then winsLbl.Text = "Wins: " .. tostring(winsStat.Value) end
+                    if rebirthStat then rebirthLbl.Text = "Rebirths: " .. tostring(rebirthStat.Value) end
+                end
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local zones = workspace:FindFirstChild("Zones")
+                    local closestName, closestDist = "--", math.huge
+                    if zones then
+                        for _, zone in ipairs(zones:GetChildren()) do
+                            if zone:IsA("BasePart") or zone:IsA("Model") then
+                                local pos = zone:IsA("Model") and zone:GetPivot().Position or zone.Position
+                                local dist = (hrp.Position - pos).Magnitude
+                                if dist < closestDist then
+                                    closestDist = dist
+                                    closestName = zone.Name
+                                end
+                            end
+                        end
+                    end
+                    zoneLbl.Text = "Zone: " .. closestName
+                end
+            end
+        end)
+    end
+else
+    makeLabel(gamePage, "⚠ This game is not supported.", 20, 14, Color3.fromRGB(230, 100, 100), true, true)
+    makeLabel(gamePage, "Join a supported game from the Games List to load its switches.", 46, 11, COLOR_DIM, false, true)
+end
 
 task.spawn(function()
     while task.wait(0.1) do
-        active      = toggleStates["farm"]    or false
-        autoPlace   = toggleStates["equip"]   or false
-        autoRebirth = toggleStates["rebirth"] or false
-        autoUpgrade = toggleStates["upgrade"] or false
+        if isGameSupported then
+            active      = toggleStates["farm"]    or false
+            autoPlace   = toggleStates["equip"]   or false
+            autoRebirth = toggleStates["rebirth"] or false
+            autoUpgrade = toggleStates["upgrade"] or false
+        end
     end
 end)
 
@@ -357,7 +411,7 @@ gamesListPage.Visible = false
 
 local searchBg = Instance.new("Frame", gamesListPage)
 searchBg.Size = UDim2.new(0.92, 0, 0, 32)
-searchBg.Position = UDim2.new(0.04, 0, 0, 10)
+searchBg.Position = UDim2.new(0.04, 0, 0, 64)
 searchBg.BackgroundColor3 = Color3.fromRGB(68, 50, 125)
 searchBg.ZIndex = 4
 Instance.new("UICorner", searchBg).CornerRadius = UDim.new(0, 8)
@@ -382,12 +436,37 @@ searchBox.TextXAlignment = Enum.TextXAlignment.Left
 searchBox.ClearTextOnFocus = false
 searchBox.ZIndex = 5
 
+local noteLbl = Instance.new("TextLabel", gamesListPage)
+noteLbl.Size = UDim2.new(0.92, 0, 0, 30)
+noteLbl.Position = UDim2.new(0.04, 0, 0, 0)
+noteLbl.BackgroundTransparency = 1
+noteLbl.Text = "Note: Teleport may sometimes fail to load the game due to executor/server limitations."
+noteLbl.TextColor3 = COLOR_DIM
+noteLbl.Font = Enum.Font.Gotham
+noteLbl.TextSize = 11
+noteLbl.TextXAlignment = Enum.TextXAlignment.Left
+noteLbl.TextWrapped = true
+noteLbl.ZIndex = 6
+
+local errorLbl = Instance.new("TextLabel", gamesListPage)
+errorLbl.Size = UDim2.new(0.92, 0, 0, 30)
+errorLbl.Position = UDim2.new(0.04, 0, 0, 30)
+errorLbl.BackgroundTransparency = 1
+errorLbl.Text = ""
+errorLbl.TextColor3 = Color3.fromRGB(230, 90, 90)
+errorLbl.Font = Enum.Font.GothamMedium
+errorLbl.TextSize = 12
+errorLbl.TextXAlignment = Enum.TextXAlignment.Left
+errorLbl.TextWrapped = true
+errorLbl.Visible = false
+errorLbl.ZIndex = 6
+
 local gameCards = {}
 local function buildGameCards()
     for _, c in pairs(gameCards) do c:Destroy() end
     gameCards = {}
     local query = searchBox.Text:lower()
-    local y = 52
+    local y = 106
     for _, g in ipairs(gamesList) do
         if query == "" or g.name:lower():find(query, 1, true) then
             local card = Instance.new("Frame", gamesListPage)
@@ -426,6 +505,28 @@ local function buildGameCards()
             statusLbl.TextSize = 11
             statusLbl.TextXAlignment = Enum.TextXAlignment.Right
             statusLbl.ZIndex = 5
+
+            if g.placeId then
+                local teleportBtn = Instance.new("TextButton", card)
+                teleportBtn.Size = UDim2.new(1, 0, 1, 0)
+                teleportBtn.BackgroundTransparency = 1
+                teleportBtn.Text = ""
+                teleportBtn.ZIndex = 6
+                teleportBtn.MouseButton1Click:Connect(function()
+                    if not errorLbl then return end
+                    errorLbl.Text = "Attempting teleport to " .. g.name .. "... (this can sometimes fail to load)"
+                    errorLbl.TextColor3 = COLOR_DIM
+                    errorLbl.Visible = true
+                    local ok, err = pcall(function()
+                        TeleportService:Teleport(g.placeId, player)
+                    end)
+                    if not ok then
+                        errorLbl.Text = "Teleport FAILED: " .. tostring(err)
+                        errorLbl.TextColor3 = Color3.fromRGB(230, 90, 90)
+                    end
+                end)
+            end
+
             table.insert(gameCards, card)
             y = y + 52
         end
@@ -435,7 +536,7 @@ buildGameCards()
 searchBox:GetPropertyChangedSignal("Text"):Connect(buildGameCards)
 
 -- =============================================
--- CREDITS PAGE (clean, no home info)
+-- CREDITS PAGE
 -- =============================================
 local creditsPage = Instance.new("Frame", pageContainer)
 creditsPage.Size = UDim2.new(1, 0, 1, 0)
@@ -451,8 +552,8 @@ makeLabel(creditsPage, "Version:  " .. SCRIPT_VERSION, 52, 12, COLOR_DIM, false)
 -- PAGE SWITCHING
 -- =============================================
 local pages = {
-    home      = homePage,
-    game      = gamePage,
+    home    = homePage,
+    game    = gamePage,
     gameslist = gamesListPage,
     settings  = nil,
     credits   = creditsPage,
@@ -494,7 +595,7 @@ end)
 -- =============================================
 task.spawn(function()
     while task.wait(0.5) do
-        if active then
+        if active and isGameSupported then
             local PurchaseEvent = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("PurchaseUpgrade")
             if PurchaseEvent and grabLimit < 6 then
                 PurchaseEvent:FireServer("CarryCapacity", 1)
@@ -524,9 +625,27 @@ end)
 
 task.spawn(function()
     while task.wait(2) do
-        local Events = ReplicatedStorage:FindFirstChild("Events")
-        if autoRebirth and Events and Events:FindFirstChild("RequestRebirth") then Events.RequestRebirth:FireServer() end
-        if autoPlace   and Events and Events:FindFirstChild("PlaceBestBrainrots") then Events.PlaceBestBrainrots:FireServer() end
-        if autoUpgrade and Events and Events:FindFirstChild("PurchaseUpgrade") then Events.PurchaseUpgrade:FireServer("BikeSpeed", 10) end
+        if isGameSupported then
+            local Events = ReplicatedStorage:FindFirstChild("Events")
+            if autoRebirth and Events and Events:FindFirstChild("RequestRebirth") then Events.RequestRebirth:FireServer() end
+            if autoPlace   and Events and Events:FindFirstChild("PlaceBestBrainrots") then Events.PlaceBestBrainrots:FireServer() end
+            if autoUpgrade and Events and Events:FindFirstChild("PurchaseUpgrade") then Events.PurchaseUpgrade:FireServer("BikeSpeed", 10) end
+        end
+    end
+end)
+
+-- NEW AUTO FARM WINS LOOP
+task.spawn(function()
+    while task.wait(0.5) do
+        if isGameSupported and currentGameData.name == "+1 Backflip Obby Escape" then
+            if toggleStates["autoWin"] then
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local target = workspace:FindFirstChild("GiveWins") and workspace.GiveWins:FindFirstChild("15")
+                
+                if hrp and target then
+                    hrp.CFrame = target:GetPivot()
+                end
+            end
+        end
     end
 end)
