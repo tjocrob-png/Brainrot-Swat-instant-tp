@@ -1,3 +1,7 @@
+-- =========================================================================
+-- YOUR ORIGINAL SCRIPT + ADDED AUTO FARM SPEED SWITCH
+-- =========================================================================
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
@@ -246,9 +250,7 @@ pageContainer.Position = UDim2.new(0, 0, 0, 42)
 pageContainer.BackgroundTransparency = 1
 pageContainer.ZIndex = 3
 
--- =============================================
 -- HOME PAGE
--- =============================================
 local homePage = Instance.new("Frame", pageContainer)
 homePage.Size = UDim2.new(1, 0, 1, 0)
 homePage.BackgroundTransparency = 1
@@ -282,9 +284,7 @@ divider.ZIndex = 4
 makeLabel(homePage, "Executor:   " .. executorName, 72, 12, COLOR_DIM, false)
 makeLabel(homePage, "Version:     " .. SCRIPT_VERSION, 90, 12, COLOR_DIM, false)
 
--- =============================================
 -- TOGGLE BUILDER
--- =============================================
 local toggleStates = {}
 
 local function createToggle(parent, yPos, labelText, stateKey)
@@ -330,9 +330,7 @@ local function createToggle(parent, yPos, labelText, stateKey)
     end)
 end
 
--- =============================================
 -- GAME PAGE
--- =============================================
 local gamePage = Instance.new("Frame", pageContainer)
 gamePage.Size = UDim2.new(1, 0, 1, 0)
 gamePage.BackgroundTransparency = 1
@@ -348,11 +346,12 @@ if isGameSupported then
         createToggle(gamePage, 114, "Auto Rebirth",       "rebirth")
         createToggle(gamePage, 166, "Auto Upgrade Speed", "upgrade")
     elseif currentGameData.name == "+1 Backflip Obby Escape" then
-        local winsLbl   = makeLabel(gamePage, "Wins: --",     20, 13, COLOR_WHITE, false)
+        local winsLbl   = makeLabel(gamePage, "Wins: --",       20, 13, COLOR_WHITE, false)
         local rebirthLbl = makeLabel(gamePage, "Rebirths: --", 44, 13, COLOR_WHITE, false)
-        local zoneLbl   = makeLabel(gamePage, "Zone: --",      68, 13, COLOR_WHITE, false)
+        local zoneLbl    = makeLabel(gamePage, "Zone: --",       68, 13, COLOR_WHITE, false)
         
         createToggle(gamePage, 114, "Auto Farm Wins", "autoWin")
+        createToggle(gamePage, 166, "Auto Farm Speed", "autoSpeed") -- NEW SWITCH ADDED
 
         task.spawn(function()
             while task.wait(1) do
@@ -400,9 +399,7 @@ task.spawn(function()
     end
 end)
 
--- =============================================
 -- GAMES LIST PAGE
--- =============================================
 local gamesListPage = Instance.new("Frame", pageContainer)
 gamesListPage.Size = UDim2.new(1, 0, 1, 0)
 gamesListPage.BackgroundTransparency = 1
@@ -535,9 +532,7 @@ end
 buildGameCards()
 searchBox:GetPropertyChangedSignal("Text"):Connect(buildGameCards)
 
--- =============================================
 -- CREDITS PAGE
--- =============================================
 local creditsPage = Instance.new("Frame", pageContainer)
 creditsPage.Size = UDim2.new(1, 0, 1, 0)
 creditsPage.BackgroundTransparency = 1
@@ -548,9 +543,7 @@ makeLabel(creditsPage, "Brainrot Swat", 12, 16, COLOR_WHITE, true)
 makeLabel(creditsPage, "Script by HaiperEXE", 34, 12, COLOR_DIM, false)
 makeLabel(creditsPage, "Version:  " .. SCRIPT_VERSION, 52, 12, COLOR_DIM, false)
 
--- =============================================
 -- PAGE SWITCHING
--- =============================================
 local pages = {
     home    = homePage,
     game    = gamePage,
@@ -574,9 +567,7 @@ end
 
 switchPage(currentPage)
 
--- =============================================
 -- HIDE UI / CLOSE / OPEN
--- =============================================
 hideUIBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
     openBtn.Visible = true
@@ -590,9 +581,7 @@ openBtn.MouseButton1Click:Connect(function()
     openBtn.Visible = false
 end)
 
--- =============================================
 -- GAME LOOPS
--- =============================================
 task.spawn(function()
     while task.wait(0.5) do
         if active and isGameSupported then
@@ -605,7 +594,7 @@ task.spawn(function()
             if hrp then
                 local itemSpawns = workspace:FindFirstChild("ItemSpawns")
                 local target = (itemSpawns and itemSpawns:FindFirstChild("9") and itemSpawns["9"]:FindFirstChild("SpawnedItem")) and itemSpawns["9"]
-                             or (itemSpawns and itemSpawns:FindFirstChild("8") and itemSpawns["8"]:FindFirstChild("SpawnedItem") and itemSpawns["8"])
+                           or (itemSpawns and itemSpawns:FindFirstChild("8") and itemSpawns["8"]:FindFirstChild("SpawnedItem") and itemSpawns["8"])
                 local prompt = target and target:FindFirstChild("SpawnedItem"):FindFirstChildWhichIsA("ProximityPrompt", true)
                 if prompt then
                     hrp.CFrame = target:FindFirstChild("SpawnedItem"):GetPivot()
@@ -644,6 +633,20 @@ task.spawn(function()
                 
                 if hrp and target then
                     hrp.CFrame = target:GetPivot()
+                end
+            end
+        end
+    end
+end)
+
+-- NEW AUTO FARM SPEED LOOP
+task.spawn(function()
+    while task.wait(0.03) do -- Fast, optimized loop to prevent crashing
+        if isGameSupported and currentGameData.name == "+1 Backflip Obby Escape" then
+            if toggleStates["autoSpeed"] then
+                local Event = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("AddSpeed")
+                if Event then
+                    Event:FireServer()
                 end
             end
         end
